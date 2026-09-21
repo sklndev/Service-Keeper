@@ -9,17 +9,17 @@
   <img alt="Kotlin" src="https://img.shields.io/badge/Kotlin-7F52FF?logo=kotlin&logoColor=white&style=for-the-badge"/>
   <br/>
   <!-- Build / Activity -->
-  <a href="https://github.com/shaunkleyn/Service-Keeper/actions/workflows/build.yml"><img alt="Build Status" src="https://img.shields.io/github/actions/workflow/status/shaunkleyn/Service-Keeper/build.yml?style=for-the-badge&logo=githubactions&logoColor=white"/></a>
+  <a href="https://github.com/sklndev/Service-Keeper/actions/workflows/build.yml"><img alt="Build Status" src="https://img.shields.io/github/actions/workflow/status/shaunkleyn/Service-Keeper/build.yml?style=for-the-badge&logo=githubactions&logoColor=white"/></a>
   <img alt="Last Commit" src="https://img.shields.io/github/last-commit/shaunkleyn/Service-Keeper?style=for-the-badge"/>
-  <img alt="Issues" src="https://img.shields.io/github/issues/shaunkleyn/Service-Keeper?style=for-the-badge"/>
+  <img alt="Issues" src="https://img.shields.io/github/issues/sklndev/Service-Keeper?style=for-the-badge"/>
   <br/>
   <!-- Stars -->
-  <a href="https://github.com/shaunkleyn/Service-Keeper/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/shaunkleyn/Service-Keeper?color=ffff00&style=for-the-badge&labelColor=a1a116"/></a>
+  <a href="https://github.com/sklndev/Service-Keeper/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/shaunkleyn/Service-Keeper?color=ffff00&style=for-the-badge&labelColor=a1a116"/></a>
   <!-- Downloads -->
-  <a href="https://github.com/shaunkleyn/Service-Keeper/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/shaunkleyn/Service-Keeper/total?color=00bcd4&style=for-the-badge&labelColor=006064"/></a>
+  <a href="https://github.com/sklndev/Service-Keeper/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/shaunkleyn/Service-Keeper/total?color=00bcd4&style=for-the-badge&labelColor=006064"/></a>
   <br/>
   <!-- Distribution -->
-  <a href="https://github.com/shaunkleyn/Service-Keeper/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/shaunkleyn/Service-Keeper?color=a1168e&include_prereleases&logo=github&style=for-the-badge&labelColor=700f63"/></a>
+  <a href="https://github.com/sklndev/Service-Keeper/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/shaunkleyn/Service-Keeper?color=a1168e&include_prereleases&logo=github&style=for-the-badge&labelColor=700f63"/></a>
   <a href="LICENSE"><img alt="License: GPL v3" src="https://img.shields.io/badge/License-GPLv3-blue.svg?style=for-the-badge"/></a>
 </p>
 
@@ -151,15 +151,15 @@ Service Keeper is free and open source software, and is 100% offline (no network
 ### Download Options
 
 <p align="center">
-  <a href="https://github.com/shaunkleyn/Service-Keeper/releases/latest">
+  <a href="https://github.com/sklndev/Service-Keeper/releases/latest">
     <img src="https://img.shields.io/badge/Download-Latest%20Release-brightgreen?style=for-the-badge&logo=android" alt="Download Latest Release">
   </a>
 </p>
 
 | Method | Details | Status |
 |--------|---------|--------|
-| 📦 **[GitHub Releases](https://github.com/shaunkleyn/Service-Keeper/releases)** | Download APK directly (universal or ABI-specific) | ✅ Available |
-| 🔄 **[Obtainium](https://github.com/ImranR98/Obtainium)** | Add `https://github.com/shaunkleyn/service_keeper` as source | ✅ Available |
+| 📦 **[GitHub Releases](https://github.com/sklndev/Service-Keeper/releases)** | Download APK directly (universal or ABI-specific) | ✅ Available |
+| 🔄 **[Obtainium](https://github.com/ImranR98/Obtainium)** | Add `https://github.com/sklndev/service_keeper` as source | ✅ Available |
 | 🤖 **F-Droid** | Official F-Droid repository | 🔜 Pending submission |
 | 📋 **IzzyOnDroid** | IzzyOnDroid F-Droid repo | 🔜 Pending submission |
 
@@ -204,7 +204,7 @@ Tap **+** on the Services tab → browse running services by app → select what
 ```bash
 # Prerequisites: Flutter 3.x, Android SDK (minSdk 26, targetSdk 35)
 
-git clone https://github.com/shaunkleyn/service_keeper.git
+git clone https://github.com/sklndev/service_keeper.git
 cd service_keeper
 flutter pub get
 flutter run                          # debug on connected device
@@ -328,10 +328,10 @@ Most apps work fine, but some apps with aggressive self-protection or special sy
 
 ### App keeps crashing
 
-1. **Update to latest version** — check [Releases](https://github.com/shaunkleyn/Service-Keeper/releases)
+1. **Update to latest version** — check [Releases](https://github.com/sklndev/Service-Keeper/releases)
 2. **Clear app data** — Settings → Apps → Service Keeper → Storage → Clear Data
 3. **Check Android version** — minimum API 26 (Android 8.0) required
-4. **Report the issue** — [open a GitHub issue](https://github.com/shaunkleyn/Service-Keeper/issues) with crash details
+4. **Report the issue** — [open a GitHub issue](https://github.com/sklndev/Service-Keeper/issues) with crash details
 
 ### Battery optimization warnings
 
@@ -366,7 +366,7 @@ Planned features and improvements:
 - [ ] **Service dependency chains** — automatically restart dependent services in order
 - [ ] **F-Droid listing** — official F-Droid and IzzyOnDroid availability
 
-> Have a feature request? [Open an issue](https://github.com/shaunkleyn/Service-Keeper/issues) with the `enhancement` label!
+> Have a feature request? [Open an issue](https://github.com/sklndev/Service-Keeper/issues) with the `enhancement` label!
 
 ---
 
@@ -376,8 +376,8 @@ Contributions are welcome! Here's how you can help:
 
 ### Ways to Contribute
 
-- 🐛 **Report bugs** — [open an issue](https://github.com/shaunkleyn/Service-Keeper/issues/new) with detailed steps to reproduce
-- 💡 **Suggest features** — share your ideas in the [issues](https://github.com/shaunkleyn/Service-Keeper/issues)
+- 🐛 **Report bugs** — [open an issue](https://github.com/sklndev/Service-Keeper/issues/new) with detailed steps to reproduce
+- 💡 **Suggest features** — share your ideas in the [issues](https://github.com/sklndev/Service-Keeper/issues)
 - 📝 **Improve documentation** — fix typos, clarify instructions, add examples
 - 🌍 **Translate** — help localize the app (currently English only)
 - 💻 **Submit code** — fork, make changes, and open a pull request
@@ -410,7 +410,7 @@ All changes should be tested on a real Android device with Shizuku before submit
 If you find Service Keeper useful, please consider:
 
 <p align="center">
-  <a href="https://github.com/shaunkleyn/Service-Keeper/stargazers">
+  <a href="https://github.com/sklndev/Service-Keeper/stargazers">
     <img src="https://img.shields.io/badge/⭐-Star%20this%20repo-yellow?style=for-the-badge" alt="Star this repo">
   </a>
 </p>
@@ -431,7 +431,7 @@ If you find Service Keeper useful, please consider:
 
 ## 🤖 AI Disclosure
 
-This project was prototyped and developed with heavy use of Claude (Anthropic). The development approach is commonly called "vibe coding" — iterating rapidly with an AI pair programmer. All generated code was tested on a physical device before shipping. If you find bugs, [open an issue](https://github.com/shaunkleyn/Service-Keeper/issues).
+This project was prototyped and developed with heavy use of Claude (Anthropic). The development approach is commonly called "vibe coding" — iterating rapidly with an AI pair programmer. All generated code was tested on a physical device before shipping. If you find bugs, [open an issue](https://github.com/sklndev/Service-Keeper/issues).
 
 ---
 
@@ -456,7 +456,7 @@ GNU General Public License for more details.
 ---
 
 <p align="center">
-  Made with ❤️ and 🤖 • <a href="https://github.com/shaunkleyn/Service-Keeper/issues/new?labels=bug">Report Bug</a> • <a href="https://github.com/shaunkleyn/Service-Keeper/issues/new?labels=enhancement">Request Feature</a>
+  Made with ❤️ and 🤖 • <a href="https://github.com/sklndev/Service-Keeper/issues/new?labels=bug">Report Bug</a> • <a href="https://github.com/sklndev/Service-Keeper/issues/new?labels=enhancement">Request Feature</a>
 </p>
 
 <p align="center">
