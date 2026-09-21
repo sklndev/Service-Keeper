@@ -8,16 +8,16 @@
   "detailed_description": "Service Keeper monitors background services, accessibility services, and notification listeners killed or disabled by the system, and automatically restarts or re-enables them using Shizuku for privileged shell access (no root required).\n\n**Key Features:**\n- Monitors background services and restarts them the moment they're killed.\n- Monitors accessibility services and re-enables them if Android revokes access.\n- Monitors notification listeners and re-enables them if disabled by the system.\n- Configurable per-service check interval (5 minutes to 4+ hours).\n- Full timestamped audit log of every detected stop, restart attempt, and outcome.\n- Reschedules all monitors automatically after device reboot.\n- Per-app toggle for restart notifications.\n- App relaunch that restores whatever app you were using afterward, with configurable timing (always, only when idle, only when locked, etc.).\n\nDoes not require or request any network permissions and does not collect or transmit any data.",
   "developer_message": "Built to stop Android from silently killing the background services I actually need running. Open source, feedback and issues welcome.",
   "screenshots": [
-    "https://raw.githubusercontent.com/shaunkleyn/Service-Keeper/main/fastlane/metadata/android/en-US/images/1.jpg",
-    "https://raw.githubusercontent.com/shaunkleyn/Service-Keeper/main/fastlane/metadata/android/en-US/images/2.jpg",
-    "https://raw.githubusercontent.com/shaunkleyn/Service-Keeper/main/fastlane/metadata/android/en-US/images/3.jpg",
-    "https://raw.githubusercontent.com/shaunkleyn/Service-Keeper/main/fastlane/metadata/android/en-US/images/4.jpg",
-    "https://raw.githubusercontent.com/shaunkleyn/Service-Keeper/main/fastlane/metadata/android/en-US/images/5.jpg",
-    "https://raw.githubusercontent.com/shaunkleyn/Service-Keeper/main/fastlane/metadata/android/en-US/images/6.jpg",
-    "https://raw.githubusercontent.com/shaunkleyn/Service-Keeper/main/fastlane/metadata/android/en-US/images/7.jpg",
-    "https://raw.githubusercontent.com/shaunkleyn/Service-Keeper/main/fastlane/metadata/android/en-US/images/8.jpg",
-    "https://raw.githubusercontent.com/shaunkleyn/Service-Keeper/main/fastlane/metadata/android/en-US/images/9.jpg",
-    "https://raw.githubusercontent.com/shaunkleyn/Service-Keeper/main/fastlane/metadata/android/en-US/images/10.jpg"
+    "https://raw.githubusercontent.com/sklndev/Service-Keeper/main/fastlane/metadata/android/en-US/images/1.jpg",
+    "https://raw.githubusercontent.com/sklndev/Service-Keeper/main/fastlane/metadata/android/en-US/images/2.jpg",
+    "https://raw.githubusercontent.com/sklndev/Service-Keeper/main/fastlane/metadata/android/en-US/images/3.jpg",
+    "https://raw.githubusercontent.com/sklndev/Service-Keeper/main/fastlane/metadata/android/en-US/images/4.jpg",
+    "https://raw.githubusercontent.com/sklndev/Service-Keeper/main/fastlane/metadata/android/en-US/images/5.jpg",
+    "https://raw.githubusercontent.com/sklndev/Service-Keeper/main/fastlane/metadata/android/en-US/images/6.jpg",
+    "https://raw.githubusercontent.com/sklndev/Service-Keeper/main/fastlane/metadata/android/en-US/images/7.jpg",
+    "https://raw.githubusercontent.com/sklndev/Service-Keeper/main/fastlane/metadata/android/en-US/images/8.jpg",
+    "https://raw.githubusercontent.com/sklndev/Service-Keeper/main/fastlane/metadata/android/en-US/images/9.jpg",
+    "https://raw.githubusercontent.com/sklndev/Service-Keeper/main/fastlane/metadata/android/en-US/images/10.jpg"
   ],
   "version_name": "1.0.5",
   "min_sdk": 26,
@@ -37,19 +37,19 @@
     "automation"
   ],
 
-  "icon_url": "https://raw.githubusercontent.com/shaunkleyn/Service-Keeper/main/android/app/src/main/res/playstore-icon.png",
-  "banner_url": "https://raw.githubusercontent.com/shaunkleyn/Service-Keeper/main/fastlane/metadata/android/en-US/images/featureGraphic.png",
-  "repo_url": "https://github.com/shaunkleyn/Service-Keeper",
-  "download_url": "https://github.com/shaunkleyn/Service-Keeper/releases/download/v1.0.5/app-release.apk",
+  "icon_url": "https://raw.githubusercontent.com/sklndev/Service-Keeper/main/android/app/src/main/res/playstore-icon.png",
+  "banner_url": "https://raw.githubusercontent.com/sklndev/Service-Keeper/main/fastlane/metadata/android/en-US/images/featureGraphic.png",
+  "repo_url": "https://github.com/sklndev/Service-Keeper",
+  "download_url": "https://github.com/sklndev/Service-Keeper/releases/download/v1.0.5/app-release.apk",
 
   "has_ads": false,
 
   "developer": {
     "name": "Shaun Kleyn",
-    "account_url": "https://github.com/shaunkleyn",
-    "email": "mail@shaunkleyn.co.za",
+    "account_url": "https://github.com/sklndev",
+    "email": "hi@skln.me",
     "socials": {
-      "github": "https://github.com/shaunkleyn"
+      "github": "https://github.com/sklndev"
     }
   }
 }
