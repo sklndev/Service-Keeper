@@ -22,6 +22,23 @@ class MonitorWorker(context: Context, params: WorkerParameters) :
         private const val GROUP_KEY = "com.shaunkleyn.service_keeper.RESTARTS"
         private const val SUMMARY_ID = 999
         private var notifId = 1000
+        private val packageLocks = mutableMapOf<String, Any>()
+        private val recentAppRelaunches = mutableMapOf<String, Long>()
+
+        @Synchronized
+        private fun packageLock(packageName: String): Any =
+            packageLocks.getOrPut(packageName) { Any() }
+
+        @Synchronized
+        private fun markAppRelaunched(packageName: String) {
+            recentAppRelaunches[packageName] = System.currentTimeMillis()
+        }
+
+        @Synchronized
+        private fun wasAppRecentlyRelaunched(packageName: String): Boolean {
+            val launchedAt = recentAppRelaunches[packageName] ?: return false
+            return System.currentTimeMillis() - launchedAt < 60_000L
+        }
 
         fun schedule(context: Context, workTag: String, intervalMinutes: Long, inputData: Data) {
             val request = PeriodicWorkRequestBuilder<MonitorWorker>(
@@ -117,41 +134,12 @@ class MonitorWorker(context: Context, params: WorkerParameters) :
 
         if (!ShizukuExecutor.isReady()) return Result.retry()
 
-        val running = ShizukuExecutor.isServiceRunning(pkg, cls)
-        if (!running) {
-            appendAuditEvent(
+        synchronized(packageLock(pkg)) {
+            recoverPackage(
                 pkg,
-                cls,
-                label,
-                "DETECTED_STOPPED",
-                "AUTOMATIC",
-                "Worker check detected service stopped (interval: ${intervalMinutes} min)"
+                intervalMinutes,
+                FallbackCandidate(cls, label, appName, appRestartEnabled)
             )
-            appendAuditEvent(
-                pkg,
-                cls,
-                label,
-                "RESTART_ATTEMPTED",
-                "AUTOMATIC",
-                "Worker restart attempt (app restart fallback: ${if (appRestartEnabled) "on" else "off"})"
-            )
-            val notifEnabled = notificationsEnabledFor(pkg, cls)
-            val allowAppRestartNow = DeviceIdleChecker.isIdleFromPrefs(applicationContext)
-            if (appRestartEnabled && !allowAppRestartNow) {
-                PendingRelaunchQueue.enqueue(
-                    applicationContext,
-                    PendingRelaunchQueue.Entry(pkg, cls, label, notifEnabled)
-                )
-            }
-            val start = ShizukuExecutor.startServiceDetailed(pkg, cls, appRestartEnabled, allowAppRestartNow)
-            if (start.ok) {
-                appendAuditEvent(pkg, cls, label, "RESTART_SUCCESS", "AUTOMATIC", start.detail)
-                if (notifEnabled) {
-                    sendNotification(appName, "Background service was stopped and has been restarted.")
-                }
-            } else {
-                appendAuditEvent(pkg, cls, label, "RESTART_FAILED", "AUTOMATIC", start.detail)
-            }
         }
 
         // Self-chain for sub-15-min intervals
@@ -161,6 +149,130 @@ class MonitorWorker(context: Context, params: WorkerParameters) :
         }
 
         return Result.success()
+    }
+
+    private data class FallbackCandidate(
+        val serviceClass: String,
+        val label: String,
+        val appName: String,
+        val appRestartEnabled: Boolean
+    )
+
+    private data class WorkerCandidate(
+        val serviceClass: String,
+        val label: String,
+        val appName: String,
+        val appRestartEnabled: Boolean,
+        val notifEnabled: Boolean
+    )
+
+    private fun recoverPackage(
+        packageName: String,
+        intervalMinutes: Long,
+        fallback: FallbackCandidate
+    ) {
+        val candidates = monitoredCandidatesForPackage(packageName).ifEmpty {
+            listOf(
+                WorkerCandidate(
+                    fallback.serviceClass,
+                    fallback.label,
+                    fallback.appName,
+                    fallback.appRestartEnabled,
+                    notificationsEnabledFor(packageName, fallback.serviceClass)
+                )
+            )
+        }
+        val failed = mutableListOf<WorkerCandidate>()
+
+        for (candidate in candidates) {
+            if (ShizukuExecutor.isServiceRunning(packageName, candidate.serviceClass)) continue
+
+            appendAuditEvent(
+                packageName,
+                candidate.serviceClass,
+                candidate.label,
+                "DETECTED_STOPPED",
+                "AUTOMATIC",
+                "Worker check detected service stopped (interval: ${intervalMinutes} min)"
+            )
+            appendAuditEvent(
+                packageName,
+                candidate.serviceClass,
+                candidate.label,
+                "RESTART_ATTEMPTED",
+                "AUTOMATIC",
+                "Worker direct restart attempt (app restart fallback: ${if (candidate.appRestartEnabled) "on" else "off"})"
+            )
+            val start = ShizukuExecutor.startServiceDetailed(
+                packageName,
+                candidate.serviceClass,
+                appRestartEnabled = false
+            )
+            if (start.ok) {
+                appendAuditEvent(packageName, candidate.serviceClass, candidate.label, "RESTART_SUCCESS", "AUTOMATIC", start.detail)
+                if (candidate.notifEnabled) {
+                    sendNotification(candidate.appName, "Background service was stopped and has been restarted.")
+                }
+            } else if (candidate.appRestartEnabled) {
+                failed += candidate
+            } else {
+                appendAuditEvent(packageName, candidate.serviceClass, candidate.label, "RESTART_FAILED", "AUTOMATIC", start.detail)
+            }
+        }
+
+        if (failed.isEmpty() || wasAppRecentlyRelaunched(packageName)) return
+
+        if (!DeviceIdleChecker.isIdleFromPrefs(applicationContext)) {
+            for (candidate in failed) {
+                PendingRelaunchQueue.enqueue(
+                    applicationContext,
+                    PendingRelaunchQueue.Entry(
+                        packageName,
+                        candidate.serviceClass,
+                        candidate.label,
+                        candidate.notifEnabled
+                    )
+                )
+            }
+            return
+        }
+
+        val appStarted = ShizukuExecutor.restartViaAppLaunch(packageName)
+        if (appStarted) markAppRelaunched(packageName)
+        for (candidate in failed) {
+            if (appStarted) {
+                appendAuditEvent(packageName, candidate.serviceClass, candidate.label, "RESTART_SUCCESS", "AUTOMATIC", "restart method: app launch (grouped worker)")
+                if (candidate.notifEnabled) {
+                    sendNotification(candidate.appName, "Background services were stopped and the app was restarted.")
+                }
+            } else {
+                appendAuditEvent(packageName, candidate.serviceClass, candidate.label, "RESTART_FAILED", "AUTOMATIC", "direct restart failed; grouped app restart also failed")
+            }
+        }
+    }
+
+    private fun monitoredCandidatesForPackage(packageName: String): List<WorkerCandidate> {
+        return try {
+            val prefs = applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val arr = JSONArray(prefs.getString(SERVICES_KEY, "[]"))
+            (0 until arr.length()).mapNotNull { index ->
+                val obj = arr.getJSONObject(index)
+                if (!obj.optBoolean("enabled", true) ||
+                    obj.optString("packageName") != packageName
+                ) {
+                    return@mapNotNull null
+                }
+                WorkerCandidate(
+                    serviceClass = obj.getString("serviceClass"),
+                    label = obj.optString("displayLabel", packageName),
+                    appName = obj.optString("appName", obj.optString("displayLabel", packageName)),
+                    appRestartEnabled = obj.optBoolean("appRestartEnabled", false),
+                    notifEnabled = obj.optBoolean("notificationsEnabled", true)
+                )
+            }
+        } catch (_: Exception) {
+            emptyList()
+        }
     }
 
     private fun notificationsEnabledFor(pkg: String, cls: String): Boolean {

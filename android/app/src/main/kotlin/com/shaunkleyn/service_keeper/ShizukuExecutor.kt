@@ -150,7 +150,7 @@ object ShizukuExecutor {
         return true
     }
 
-    private fun restartViaAppLaunch(packageName: String): Boolean {
+    fun restartViaAppLaunch(packageName: String): Boolean {
         val previousForeground = getForegroundApp()
 
         val resolved = exec(

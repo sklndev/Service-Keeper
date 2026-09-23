@@ -63,6 +63,18 @@ class KeeperForegroundService : Service() {
     private var notifObserver: ContentObserver? = null
     private var unlockReceiver: android.content.BroadcastReceiver? = null
 
+    private data class RestartCandidate(
+        val packageName: String,
+        val serviceClass: String,
+        val label: String,
+        val notifEnabled: Boolean,
+        val appRestartEnabled: Boolean
+    )
+
+    private val packageRestartLock = Any()
+    private val pendingPackageRestarts = mutableMapOf<String, MutableMap<String, RestartCandidate>>()
+    private val activePackageRestarts = mutableSetOf<String>()
+
     private val relaunchPollHandler = Handler(Looper.getMainLooper())
     private val relaunchPollRunnable: Runnable = object : Runnable {
         override fun run() {
@@ -162,18 +174,24 @@ class KeeperForegroundService : Service() {
 
     private fun drainPendingRelaunches() {
         val pending = PendingRelaunchQueue.drainAll(applicationContext)
-        for (entry in pending) {
-            appendAuditEvent(entry.packageName, entry.serviceClass, entry.label, "RESTART_ATTEMPTED", "AUTOMATIC", "deferred relaunch, device now idle")
-            val appStarted = restartApp(entry.packageName)
-            if (appStarted) {
-                appendAuditEvent(entry.packageName, entry.serviceClass, entry.label, "RESTART_SUCCESS", "AUTOMATIC", "restart method: app launch (deferred)")
-                if (entry.notifEnabled) {
-                    pendingServiceNotifs.add(getAppName(entry.packageName))
-                    notifDebounceHandler.removeCallbacks(flushServiceNotifs)
-                    notifDebounceHandler.postDelayed(flushServiceNotifs, 1500)
+        for ((packageName, entries) in pending.groupBy { it.packageName }) {
+            entries.forEach { entry ->
+                appendAuditEvent(entry.packageName, entry.serviceClass, entry.label, "RESTART_ATTEMPTED", "AUTOMATIC", "deferred relaunch, device now idle")
+            }
+            val appStarted = restartApp(packageName)
+            for (entry in entries) {
+                if (appStarted) {
+                    appendAuditEvent(entry.packageName, entry.serviceClass, entry.label, "RESTART_SUCCESS", "AUTOMATIC", "restart method: app launch (deferred, grouped)")
+                    if (entry.notifEnabled) {
+                        pendingServiceNotifs.add(getAppName(entry.packageName))
+                    }
+                } else {
+                    appendAuditEvent(entry.packageName, entry.serviceClass, entry.label, "RESTART_FAILED", "AUTOMATIC", "deferred relaunch failed")
                 }
-            } else {
-                appendAuditEvent(entry.packageName, entry.serviceClass, entry.label, "RESTART_FAILED", "AUTOMATIC", "deferred relaunch failed")
+            }
+            if (appStarted && entries.any { it.notifEnabled }) {
+                notifDebounceHandler.removeCallbacks(flushServiceNotifs)
+                notifDebounceHandler.postDelayed(flushServiceNotifs, 1500)
             }
         }
     }
@@ -495,7 +513,9 @@ class KeeperForegroundService : Service() {
                 val label = obj.optString("displayLabel", pkg)
                 val notifEnabled = obj.optBoolean("notificationsEnabled", true)
                 val appRestartEnabled = obj.optBoolean("appRestartEnabled", false)
-                Thread { handleServiceStopped(pkg, cls, label, notifEnabled, appRestartEnabled) }.start()
+                enqueueServiceRestart(
+                    RestartCandidate(pkg, cls, label, notifEnabled, appRestartEnabled)
+                )
                 break
             }
         } catch (_: Exception) {}
@@ -514,52 +534,103 @@ class KeeperForegroundService : Service() {
                 val label = obj.optString("displayLabel", pkg)
                 val notifEnabled = obj.optBoolean("notificationsEnabled", true)
                 val appRestartEnabled = obj.optBoolean("appRestartEnabled", false)
-                Thread { handleServiceStopped(pkg, cls, label, notifEnabled, appRestartEnabled) }.start()
+                enqueueServiceRestart(
+                    RestartCandidate(pkg, cls, label, notifEnabled, appRestartEnabled)
+                )
             }
         } catch (_: Exception) {}
     }
 
-    private fun handleServiceStopped(pkg: String, cls: String, label: String, notifEnabled: Boolean, appRestartEnabled: Boolean) {
+    private fun enqueueServiceRestart(candidate: RestartCandidate) {
+        val shouldStartWorker = synchronized(packageRestartLock) {
+            pendingPackageRestarts
+                .getOrPut(candidate.packageName) { mutableMapOf() }[candidate.serviceClass] = candidate
+            activePackageRestarts.add(candidate.packageName)
+        }
+        if (shouldStartWorker) {
+            Thread { processPackageRestarts(candidate.packageName) }.start()
+        }
+    }
+
+    private fun processPackageRestarts(pkg: String) {
         try {
+            // Coalesce the individual service-stop lines emitted for one process death.
             Thread.sleep(500)
-            // Skip if service already recovered on its own
-            if (ShizukuExecutor.isServiceRunning(pkg, cls)) return
-
-            appendAuditEvent(pkg, cls, label, "DETECTED_STOPPED", "AUTOMATIC", "logcat")
-            appendAuditEvent(pkg, cls, label, "RESTART_ATTEMPTED", "AUTOMATIC", null)
-
+            val failedCandidates = mutableMapOf<String, RestartCandidate>()
             val allowAppRestartNow = DeviceIdleChecker.isIdleFromPrefs(applicationContext)
-            if (appRestartEnabled && !allowAppRestartNow) {
-                PendingRelaunchQueue.enqueue(
-                    applicationContext,
-                    PendingRelaunchQueue.Entry(pkg, cls, label, notifEnabled)
-                )
+            while (true) {
+                val batch = synchronized(packageRestartLock) {
+                    pendingPackageRestarts.remove(pkg)?.values?.toList().orEmpty()
+                }
+                if (batch.isEmpty()) break
+
+                for (candidate in batch) {
+                    if (ShizukuExecutor.isServiceRunning(pkg, candidate.serviceClass)) continue
+
+                    appendAuditEvent(pkg, candidate.serviceClass, candidate.label, "DETECTED_STOPPED", "AUTOMATIC", "logcat")
+                    appendAuditEvent(pkg, candidate.serviceClass, candidate.label, "RESTART_ATTEMPTED", "AUTOMATIC", null)
+
+                    val result = ShizukuExecutor.startServiceDetailed(
+                        pkg,
+                        candidate.serviceClass,
+                        appRestartEnabled = false
+                    )
+                    if (result.ok) {
+                        appendAuditEvent(pkg, candidate.serviceClass, candidate.label, "RESTART_SUCCESS", "AUTOMATIC", result.detail)
+                        notifyServiceRestarted(candidate)
+                    } else if (candidate.appRestartEnabled) {
+                        failedCandidates[candidate.serviceClass] = candidate
+                    } else {
+                        appendAuditEvent(pkg, candidate.serviceClass, candidate.label, "RESTART_FAILED", "AUTOMATIC", result.detail)
+                    }
+                }
+
+                // Pick up any stop events logged while the direct attempts were running.
+                Thread.sleep(500)
             }
 
-            val result = ShizukuExecutor.startServiceDetailed(pkg, cls, appRestartEnabled, allowAppRestartNow)
-            if (result.ok) {
-                appendAuditEvent(pkg, cls, label, "RESTART_SUCCESS", "AUTOMATIC", result.detail)
-                if (notifEnabled) {
-                    pendingServiceNotifs.add(getAppName(pkg))
-                    notifDebounceHandler.removeCallbacks(flushServiceNotifs)
-                    notifDebounceHandler.postDelayed(flushServiceNotifs, 1500)
-                }
-            } else if (appRestartEnabled && allowAppRestartNow) {
+            if (failedCandidates.isEmpty()) return
+
+            if (allowAppRestartNow) {
                 val appStarted = restartApp(pkg)
-                if (appStarted) {
-                    appendAuditEvent(pkg, cls, label, "RESTART_SUCCESS", "AUTOMATIC", "app restarted")
-                    if (notifEnabled) {
-                        pendingServiceNotifs.add(getAppName(pkg))
-                        notifDebounceHandler.removeCallbacks(flushServiceNotifs)
-                        notifDebounceHandler.postDelayed(flushServiceNotifs, 1500)
+                for (candidate in failedCandidates.values) {
+                    if (appStarted) {
+                        appendAuditEvent(pkg, candidate.serviceClass, candidate.label, "RESTART_SUCCESS", "AUTOMATIC", "restart method: app launch (grouped)")
+                        notifyServiceRestarted(candidate)
+                    } else {
+                        appendAuditEvent(pkg, candidate.serviceClass, candidate.label, "RESTART_FAILED", "AUTOMATIC", "service start failed; app restart also failed")
                     }
-                } else {
-                    appendAuditEvent(pkg, cls, label, "RESTART_FAILED", "AUTOMATIC", "service start failed; app restart also failed")
                 }
             } else {
-                appendAuditEvent(pkg, cls, label, "RESTART_FAILED", "AUTOMATIC", result.detail)
+                for (candidate in failedCandidates.values) {
+                    PendingRelaunchQueue.enqueue(
+                        applicationContext,
+                        PendingRelaunchQueue.Entry(
+                            pkg,
+                            candidate.serviceClass,
+                            candidate.label,
+                            candidate.notifEnabled
+                        )
+                    )
+                }
             }
         } catch (_: Exception) {}
+        finally {
+            val restartWorker = synchronized(packageRestartLock) {
+                activePackageRestarts.remove(pkg)
+                pendingPackageRestarts[pkg]?.isNotEmpty() == true && activePackageRestarts.add(pkg)
+            }
+            if (restartWorker) {
+                Thread { processPackageRestarts(pkg) }.start()
+            }
+        }
+    }
+
+    private fun notifyServiceRestarted(candidate: RestartCandidate) {
+        if (!candidate.notifEnabled) return
+        pendingServiceNotifs.add(getAppName(candidate.packageName))
+        notifDebounceHandler.removeCallbacks(flushServiceNotifs)
+        notifDebounceHandler.postDelayed(flushServiceNotifs, 1500)
     }
 
     private fun restartApp(pkg: String): Boolean {
