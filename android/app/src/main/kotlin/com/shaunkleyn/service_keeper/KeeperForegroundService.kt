@@ -40,10 +40,12 @@ class KeeperForegroundService : Service() {
             val count = serviceCount ?: readCountFromPrefs(context)
             val intent = Intent(context, KeeperForegroundService::class.java)
                 .putExtra(EXTRA_COUNT, count)
+            KeeperRecovery.schedule(context.applicationContext)
             context.startForegroundService(intent)
         }
 
         fun stop(context: Context) {
+            KeeperRecovery.cancel(context.applicationContext)
             context.stopService(Intent(context, KeeperForegroundService::class.java))
         }
 
