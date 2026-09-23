@@ -57,7 +57,6 @@ void main() async {
 
   await Workmanager().initialize(
     callbackDispatcher,
-    isInDebugMode: false,
   );
 
   runApp(const ServiceKeeperApp());

@@ -62,19 +62,14 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       _customIntervalMinutes != widget.customIntervalMinutes ||
       _appRestartEnabled != widget.appRestartEnabled;
 
-  Future<bool> _handleBackNavigation() async {
-    if (_hasChanges) {
-      Navigator.pop(context, _buildResult());
-      return false;
-    }
-    return true;
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return WillPopScope(
-      onWillPop: _handleBackNavigation,
+    return PopScope<AppSettingsResult>(
+      canPop: !_hasChanges,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && _hasChanges) Navigator.pop(context, _buildResult());
+      },
       child: Scaffold(
         appBar: AppBar(
           title: Text('${widget.appName} settings'),
@@ -160,35 +155,40 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
                   ],
                 ),
               ),
-            RadioListTile<int>(
-              title: Text('Default value (${widget.globalIntervalMinutes} min)'),
-              subtitle: Text(
-                widget.globalIntervalEnabled
-                    ? 'Use the value set in Settings'
-                    : 'Disabled globally',
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-              ),
-              value: 0,
+            RadioGroup<int>(
               groupValue: _customIntervalMinutes ?? 0,
-              onChanged: widget.globalIntervalEnabled
-                  ? (_) => setState(() => _customIntervalMinutes = null)
-                  : null,
+              onChanged: (value) {
+                if (!widget.globalIntervalEnabled || value == null) return;
+                setState(() => _customIntervalMinutes = value == 0 ? null : value);
+              },
+              child: Column(
+                children: [
+                  RadioListTile<int>(
+                    title: Text('Default value (${widget.globalIntervalMinutes} min)'),
+                    subtitle: Text(
+                      widget.globalIntervalEnabled
+                          ? 'Use the value set in Settings'
+                          : 'Disabled globally',
+                      style: theme.textTheme.bodySmall
+                          ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                    ),
+                    value: 0,
+                    enabled: widget.globalIntervalEnabled,
+                  ),
+                  ..._presets.map((p) => RadioListTile<int>(
+                        title: Text(p.label),
+                        subtitle: p.minutes < 15
+                            ? Text(
+                                'Uses alarm-based scheduling (more aggressive)',
+                                style: theme.textTheme.bodySmall,
+                              )
+                            : null,
+                        value: p.minutes,
+                        enabled: widget.globalIntervalEnabled,
+                      )),
+                ],
+              ),
             ),
-            ..._presets.map((p) => RadioListTile<int>(
-                  title: Text(p.label),
-                  subtitle: p.minutes < 15
-                      ? Text(
-                          'Uses alarm-based scheduling (more aggressive)',
-                          style: theme.textTheme.bodySmall,
-                        )
-                      : null,
-                  value: p.minutes,
-                  groupValue: _customIntervalMinutes ?? 0,
-                  onChanged: widget.globalIntervalEnabled
-                      ? (v) => setState(() => _customIntervalMinutes = v!)
-                      : null,
-                )),
             if (_effectiveMinutes < 15 && widget.globalIntervalEnabled)
               Container(
                 margin: const EdgeInsets.only(top: 8),

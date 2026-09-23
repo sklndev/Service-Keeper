@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../app_settings_notifier.dart';
-import '../services/app_info_service.dart';
 import '../services/storage_service.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -15,7 +14,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final _storage = StorageService();
 
   bool _useAppColors = false;
-  bool _useMaterialYou = false;
   bool _globalIntervalEnabled = true;
   int _defaultInterval = 15;
   String _relaunchIdleMode = 'inactivity';
@@ -52,7 +50,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (!mounted) return;
     setState(() {
       _useAppColors = prefs.getBool('use_app_colors') ?? false;
-      _useMaterialYou = prefs.getBool('use_material_you') ?? false;
       _globalIntervalEnabled = prefs.getBool('global_interval_enabled') ?? true;
       _defaultInterval = prefs.getInt('default_check_interval') ?? 15;
       _relaunchIdleMode = relaunchIdleMode;
@@ -65,18 +62,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await prefs.setBool('use_app_colors', value);
     colorfulCardsNotifier.value = value;
     setState(() => _useAppColors = value);
-  }
-
-  Future<void> _setMaterialYou(bool value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('use_material_you', value);
-    if (value) {
-      wallpaperSeedNotifier.value = await AppInfoService.getWallpaperSeedColor();
-    } else {
-      wallpaperSeedNotifier.value = null;
-    }
-    materialYouNotifier.value = value;
-    setState(() => _useMaterialYou = value);
   }
 
   Future<void> _setGlobalIntervalEnabled(bool value) async {
@@ -150,21 +135,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             value: _useAppColors,
             onChanged: _setAppColors,
           ),
-          // DynamicColorBuilder(
-          //   builder: (lightDynamic, darkDynamic) {
-          //     final nativeAvailable = lightDynamic != null && darkDynamic != null;
-          //     return SwitchListTile(
-          //       title: const Text('Material You theme'),
-          //       subtitle: Text(
-          //         nativeAvailable
-          //             ? 'Uses colors from your wallpaper.'
-          //             : 'Uses your wallpaper\'s primary color as the theme seed (Android 8.1+).',
-          //       ),
-          //       value: _useMaterialYou,
-          //       onChanged: _setMaterialYou,
-          //     );
-          //   },
-          // ),
           const Divider(height: 1),
           _sectionHeader(context, 'Interval checking'),
           Padding(
@@ -248,18 +218,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
               ),
             ),
-            ..._intervalPresets.map((p) => RadioListTile<int>(
-                  title: Text(p.label),
-                  subtitle: p.minutes < 15
-                      ? Text(
-                          'Alarm-based scheduling — more aggressive, higher battery use',
-                          style: theme.textTheme.bodySmall,
-                        )
-                      : null,
-                  value: p.minutes,
-                  groupValue: _defaultInterval,
-                  onChanged: (v) => _setDefaultInterval(v!),
-                )),
+            RadioGroup<int>(
+              groupValue: _defaultInterval,
+              onChanged: (value) {
+                if (value != null) _setDefaultInterval(value);
+              },
+              child: Column(
+                children: _intervalPresets.map((p) => RadioListTile<int>(
+                      title: Text(p.label),
+                      subtitle: p.minutes < 15
+                          ? Text(
+                              'Alarm-based scheduling — more aggressive, higher battery use',
+                              style: theme.textTheme.bodySmall,
+                            )
+                          : null,
+                      value: p.minutes,
+                    )).toList(),
+              ),
+            ),
             if (_defaultInterval < 15)
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -343,47 +319,49 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
           ),
-          RadioListTile<String>(
-            title: const Text('Always'),
-            subtitle: const Text('Relaunch immediately, even while you\'re using the phone.'),
-            value: 'always',
+          RadioGroup<String>(
             groupValue: _relaunchIdleMode,
-            onChanged: (v) => _setRelaunchIdleMode(v!),
-          ),
-          RadioListTile<String>(
-            title: const Text('No app open'),
-            subtitle: const Text('Only when the home screen is showing, no app in front.'),
-            value: 'no_foreground_app',
-            groupValue: _relaunchIdleMode,
-            onChanged: (v) => _setRelaunchIdleMode(v!),
-          ),
-          RadioListTile<String>(
-            title: const Text('No activity for a while'),
-            subtitle: const Text('Only after you\'ve stopped tapping or scrolling.'),
-            value: 'inactivity',
-            groupValue: _relaunchIdleMode,
-            onChanged: (v) => _setRelaunchIdleMode(v!),
-          ),
-          if (_relaunchIdleMode == 'inactivity')
-            Padding(
-              padding: const EdgeInsets.fromLTRB(32, 0, 16, 8),
-              child: Wrap(
-                spacing: 8,
-                children: _inactivitySecondsPresets
-                    .map((p) => ChoiceChip(
-                          label: Text(p.label),
-                          selected: _relaunchInactivitySeconds == p.seconds,
-                          onSelected: (_) => _setRelaunchInactivitySeconds(p.seconds),
-                        ))
-                    .toList(),
-              ),
+            onChanged: (value) {
+              if (value != null) _setRelaunchIdleMode(value);
+            },
+            child: Column(
+              children: [
+                const RadioListTile<String>(
+                  title: Text('Always'),
+                  subtitle: Text('Relaunch immediately, even while you\'re using the phone.'),
+                  value: 'always',
+                ),
+                const RadioListTile<String>(
+                  title: Text('No app open'),
+                  subtitle: Text('Only when the home screen is showing, no app in front.'),
+                  value: 'no_foreground_app',
+                ),
+                const RadioListTile<String>(
+                  title: Text('No activity for a while'),
+                  subtitle: Text('Only after you\'ve stopped tapping or scrolling.'),
+                  value: 'inactivity',
+                ),
+                if (_relaunchIdleMode == 'inactivity')
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(32, 0, 16, 8),
+                    child: Wrap(
+                      spacing: 8,
+                      children: _inactivitySecondsPresets
+                          .map((p) => ChoiceChip(
+                                label: Text(p.label),
+                                selected: _relaunchInactivitySeconds == p.seconds,
+                                onSelected: (_) => _setRelaunchInactivitySeconds(p.seconds),
+                              ))
+                          .toList(),
+                    ),
+                  ),
+                const RadioListTile<String>(
+                  title: Text('When locked'),
+                  subtitle: Text('Only right after you unlock the phone.'),
+                  value: 'locked',
+                ),
+              ],
             ),
-          RadioListTile<String>(
-            title: const Text('When locked'),
-            subtitle: const Text('Only right after you unlock the phone.'),
-            value: 'locked',
-            groupValue: _relaunchIdleMode,
-            onChanged: (v) => _setRelaunchIdleMode(v!),
           ),
           const Divider(height: 1),
           _sectionHeader(context, 'Banners'),
