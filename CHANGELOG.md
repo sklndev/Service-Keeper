@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+- **Shizuku uptime moved to About screen**: no longer shown in the home screen banner. Find it under Settings → About as its own tile, still live-updating.
+- **Home screen banner only shows when action is needed**: the "Shizuku active" banner is now hidden entirely once Shizuku is ready. It still appears with a warning and "Tap to fix" for not-running, not-installed, or permission-denied states.
+
 ## [1.0.5] - 2026-09-09
 
 ### Added
