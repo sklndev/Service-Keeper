@@ -195,7 +195,6 @@ class _ServicePickerScreenState extends State<ServicePickerScreen> {
   }
 
   String _labelFor(RunningService s) {
-    if (s.packageName.contains('life360')) return 'Life360';
     return s.serviceClass.split('.').last;
   }
 

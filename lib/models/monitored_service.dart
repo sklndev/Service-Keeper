@@ -41,6 +41,20 @@ class MonitoredService {
 
   String get fullServiceName => '$packageName/$serviceClass';
 
+  String get serviceDisplayName {
+    final className = serviceClass.split('.').last;
+    final label = displayLabel.trim();
+    final genericLabels = {
+      packageName.toLowerCase(),
+      packageName.split('.').last.toLowerCase(),
+      if (appName != null) appName!.trim().toLowerCase(),
+    };
+    if (label.isEmpty || genericLabels.contains(label.toLowerCase())) {
+      return className;
+    }
+    return label;
+  }
+
   ServiceState get state {
     if (wasRunning == null) return ServiceState.unknown;
     if (wasRunning!) return ServiceState.running;
