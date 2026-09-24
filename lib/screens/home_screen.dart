@@ -16,12 +16,21 @@ import '../services/database_service.dart';
 import '../services/diagnostics_service.dart';
 import '../services/system_service.dart';
 import '../widgets/app_group_card.dart';
+import '../widgets/app_mode_legend.dart';
 import '../widgets/service_tile.dart';
 import '../widgets/undo_snack_bar.dart';
 import 'service_picker_screen.dart';
 import 'service_detail_screen.dart';
 import 'app_settings_screen.dart';
 import 'service_audit_screen.dart';
+
+Map<String, List<MonitoredService>> _groupByPackage(Iterable<MonitoredService> services) {
+  final byPackage = <String, List<MonitoredService>>{};
+  for (final s in services) {
+    byPackage.putIfAbsent(s.packageName, () => []).add(s);
+  }
+  return byPackage;
+}
 
 class SelectionState {
   final int count;
@@ -94,6 +103,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final _selectedServices = <String>{};
   final _checkingServices = <String>{};
   Timer? _clockTimer;
+  Timer? _notificationToastTimer;
+  OverlayEntry? _notificationToast;
   DateTime _now = DateTime.now();
   bool get _isInSelectionMode => _selectedServices.isNotEmpty;
 
@@ -118,6 +129,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     colorfulCardsNotifier.removeListener(_onColorfulCardsChanged);
     WidgetsBinding.instance.removeObserver(this);
     _stopClockTicker();
+    _notificationToastTimer?.cancel();
+    _notificationToast?.remove();
     super.dispose();
   }
 
@@ -824,25 +837,29 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     int successCount = 0;
     int failCount = 0;
 
-    for (final s in enabled) {
-      await _log(
-        s,
-        AuditEventType.restartAttempted,
-        AuditTrigger.manual,
-        notes:
-            'Bulk manual restart (app restart fallback: ${s.appRestartEnabled ? 'on' : 'off'})',
-      );
-      final (ok, detail) = await _manager.startService(s);
+    final byPackage = _groupByPackage(enabled);
 
-      if (ok) {
-        bool? nowRunning;
-        if (detail == 'restart method: app launch') {
-          nowRunning = true; // JobIntentService; treat launch as success
-        } else {
+    for (final packageEntry in byPackage.entries) {
+      final appFallback = <(MonitoredService, String?)>[];
+
+      for (final s in packageEntry.value) {
+        await _log(
+          s,
+          AuditEventType.restartAttempted,
+          AuditTrigger.manual,
+          notes:
+              'Bulk manual direct restart (app restart fallback: ${s.appRestartEnabled ? 'on' : 'off'})',
+        );
+        final (ok, detail) =
+            await _manager.startService(s, allowAppRestart: false);
+
+        bool directRestarted = false;
+        if (ok) {
           await Future.delayed(const Duration(seconds: 2));
-          nowRunning = await _manager.isServiceRunning(s);
+          directRestarted = await _manager.isServiceRunning(s) == true;
         }
-        if (nowRunning == true) {
+
+        if (directRestarted) {
           successCount++;
           await _log(s, AuditEventType.restartSuccess, AuditTrigger.manual, notes: detail);
           await _storage.updateService(s.copyWith(
@@ -850,18 +867,55 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             wasRunning: true,
             lastChecked: DateTime.now(),
           ));
+          setState(() => _restartingServices.remove('${s.packageName}/${s.serviceClass}'));
+        } else if (s.appRestartEnabled) {
+          appFallback.add((s, detail));
         } else {
           failCount++;
-          await _log(s, AuditEventType.restartFailed, AuditTrigger.manual, notes: detail);
-          await _storage.updateService(s.copyWith(wasRunning: nowRunning));
+          await _log(
+            s,
+            AuditEventType.restartFailed,
+            AuditTrigger.manual,
+            notes: detail ?? 'Direct restart did not leave the service running',
+          );
+          await _storage.updateService(s.copyWith(wasRunning: false));
+          setState(() => _restartingServices.remove('${s.packageName}/${s.serviceClass}'));
         }
-      } else {
-        failCount++;
-        await _log(s, AuditEventType.restartFailed, AuditTrigger.manual, notes: detail);
-        await _storage.updateService(s.copyWith(wasRunning: false));
       }
 
-      setState(() => _restartingServices.remove('${s.packageName}/${s.serviceClass}'));
+      if (appFallback.isEmpty) continue;
+
+      final appStarted = await _manager.restartApp(packageEntry.key);
+      for (final (service, directDetail) in appFallback) {
+        if (appStarted) {
+          successCount++;
+          await _log(
+            service,
+            AuditEventType.restartSuccess,
+            AuditTrigger.manual,
+            notes: 'restart method: app launch (grouped)',
+          );
+          await _storage.updateService(service.copyWith(
+            lastRestarted: DateTime.now(),
+            wasRunning: true,
+            lastChecked: DateTime.now(),
+          ));
+        } else {
+          failCount++;
+          final notes = directDetail == null || directDetail.isEmpty
+              ? 'Direct restart failed; grouped app restart failed'
+              : '$directDetail; grouped app restart failed';
+          await _log(
+            service,
+            AuditEventType.restartFailed,
+            AuditTrigger.manual,
+            notes: notes,
+          );
+          await _storage.updateService(service.copyWith(wasRunning: false));
+        }
+        setState(() => _restartingServices
+            .remove('${service.packageName}/${service.serviceClass}'));
+      }
     }
 
     await _loadServices();
@@ -1196,13 +1250,91 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       AuditTrigger.manual,
     );
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(nowEnabled
-            ? 'Notifications enabled for ${service.displayLabel}'
-            : 'Notifications disabled for ${service.displayLabel}'),
-        duration: const Duration(seconds: 2),
-      ));
+      _showNotificationToast(
+        nowEnabled
+            ? 'Notifications enabled for ${service.serviceDisplayName}'
+            : 'Notifications disabled for ${service.serviceDisplayName}',
+        enabled: nowEnabled,
+      );
     }
+  }
+
+  void _showNotificationToast(String message, {required bool enabled}) {
+    _notificationToastTimer?.cancel();
+    _notificationToast?.remove();
+
+    final entry = OverlayEntry(
+      builder: (overlayContext) {
+        final theme = Theme.of(overlayContext);
+        return Positioned.fill(
+          child: IgnorePointer(
+            child: SafeArea(
+              minimum: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                child: TweenAnimationBuilder<double>(
+                  duration: const Duration(milliseconds: 180),
+                  tween: Tween(begin: 0, end: 1),
+                  builder: (_, value, child) => Opacity(
+                    opacity: value,
+                    child: Transform.translate(
+                      offset: Offset(0, 8 * (1 - value)),
+                      child: child,
+                    ),
+                  ),
+                  child: Material(
+                    key: const ValueKey('notification-toast-pill'),
+                    color: theme.colorScheme.inverseSurface,
+                    elevation: 6,
+                    shadowColor: Colors.black38,
+                    borderRadius: BorderRadius.circular(999),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 9,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            enabled
+                                ? Icons.notifications_active
+                                : Icons.notifications_off,
+                            size: 17,
+                            color: theme.colorScheme.onInverseSurface,
+                          ),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Text(
+                              message,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onInverseSurface,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+
+    _notificationToast = entry;
+    Overlay.of(context, rootOverlay: true).insert(entry);
+    _notificationToastTimer = Timer(const Duration(seconds: 2), () {
+      if (_notificationToast == entry) {
+        entry.remove();
+        _notificationToast = null;
+      }
+    });
   }
 
   Future<void> _setGroupState(
@@ -1278,14 +1410,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   List<(String pkg, String appName, List<MonitoredService> services)> _groupedServices() {
-    final groups = <String, List<MonitoredService>>{};
-    for (final s in _services) {
-      groups.putIfAbsent(s.packageName, () => []).add(s);
-    }
+    final groups = _groupByPackage(_services);
     final result = groups.entries.map((e) {
       final name = _appNameCache[e.key] ?? e.key.split('.').last;
       final sorted = [...e.value]
-        ..sort((a, b) => a.displayLabel.toLowerCase().compareTo(b.displayLabel.toLowerCase()));
+        ..sort((a, b) =>
+            a.serviceDisplayName.toLowerCase().compareTo(b.serviceDisplayName.toLowerCase()));
       return (e.key, name, sorted);
     }).toList();
     result.sort((a, b) => a.$2.toLowerCase().compareTo(b.$2.toLowerCase()));
@@ -1392,6 +1522,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           setState(() => _expandedGroups[pkg] = !(_expandedGroups[pkg] ?? false)),
       packageName: pkg,
       appName: appName,
+      serviceCount: services.length,
       icon: _AppIconWithRings(
         iconBytes: _iconCache[pkg],
         packageName: pkg,
@@ -1403,8 +1534,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         now: _now,
       ),
       appColor: appColor,
-      subtitle:
-          '${services.length} service${services.length == 1 ? '' : 's'} monitored • App restart ${appRestartEnabled ? 'on' : 'off'}',
+        subtitle: 'App restart ${appRestartEnabled ? 'on' : 'off'}',
       groupState: groupState,
       hasIssue: anyIssue,
       onGroupStateChanged: (state) => _setGroupState(pkg, services, state),
@@ -1423,57 +1553,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       isPartiallySelected: _isAppPartiallySelected(services),
       isRestoredMissing: isMissingAfterRestore,
       children: [
-        _buildAppModeLegend(context, groupState),
+        AppModeLegend(
+          value: groupState,
+          onChanged: (state) => _setGroupState(pkg, services, state),
+        ),
         for (final s in services) _buildServiceRow(context, pkg, s, appColor),
       ],
-    );
-  }
-
-  Widget _buildAppModeLegend(BuildContext context, int groupState) {
-    final cs = Theme.of(context).colorScheme;
-
-    Widget item(int value, String label, Color activeBg, Color activeFg) {
-      final selected = groupState == value;
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-        decoration: BoxDecoration(
-          color: selected ? activeBg : cs.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-            color: selected ? activeBg : cs.outlineVariant,
-          ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w700,
-            color: selected ? activeFg : cs.onSurfaceVariant,
-          ),
-        ),
-      );
-    }
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
-      child: Row(
-        children: [
-          item(0, 'Disabled', cs.errorContainer, cs.onErrorContainer),
-          const SizedBox(width: 6),
-          item(1, 'Monitor', cs.tertiaryContainer, cs.onTertiaryContainer),
-          const SizedBox(width: 6),
-          item(2, 'Notify', cs.primaryContainer, cs.onPrimaryContainer),
-          const Spacer(),
-          Text(
-            'Mode',
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-              color: cs.onSurfaceVariant,
-            ),
-          ),
-        ],
-      ),
     );
   }
 

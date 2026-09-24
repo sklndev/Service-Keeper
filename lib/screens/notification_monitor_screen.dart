@@ -437,33 +437,30 @@ class _NotificationMonitorScreenState extends State<NotificationMonitorScreen>
     return groups;
   }
 
+  Iterable<({String serviceClass, String appName})> _monitoredServices(
+      String pkg, List<({String serviceClass, String appName})> services) {
+    return services.where((s) => _monitoredKeys.contains('$pkg/${s.serviceClass}'));
+  }
+
   int _groupState(String pkg, List<({String serviceClass, String appName})> services) {
-    final monitoredCount =
-        services.where((s) => _monitoredKeys.contains('$pkg/${s.serviceClass}')).length;
-    if (monitoredCount == 0) return 0;
-    final monitoredSvcs =
-        services.where((s) => _monitoredKeys.contains('$pkg/${s.serviceClass}'));
+    final monitored = _monitoredServices(pkg, services).toList();
+    if (monitored.isEmpty) return 0;
     final allNotifOff =
-        monitoredSvcs.every((s) => _notifOffKeys.contains('$pkg/${s.serviceClass}'));
+        monitored.every((s) => _notifOffKeys.contains('$pkg/${s.serviceClass}'));
     return allNotifOff ? 1 : 2;
   }
 
   bool _hasIssue(String pkg, List<({String serviceClass, String appName})> services) {
-    final monitoredCount =
-        services.where((s) => _monitoredKeys.contains('$pkg/${s.serviceClass}')).length;
-    final activeMonitored = services
-        .where((s) =>
-            _monitoredKeys.contains('$pkg/${s.serviceClass}') &&
-            _enabledKeys.contains('$pkg/${s.serviceClass}'))
-        .length;
-    return monitoredCount > 0 && activeMonitored < monitoredCount;
+    final monitored = _monitoredServices(pkg, services).toList();
+    final activeMonitored =
+        monitored.where((s) => _enabledKeys.contains('$pkg/${s.serviceClass}')).length;
+    return monitored.isNotEmpty && activeMonitored < monitored.length;
   }
 
   String _subtitle(String pkg, List<({String serviceClass, String appName})> services) {
-    final monitoredCount =
-        services.where((s) => _monitoredKeys.contains('$pkg/${s.serviceClass}')).length;
-    if (monitoredCount == 0) return 'Not monitored';
-    return '$monitoredCount of ${services.length} monitored';
+    return _monitoredServices(pkg, services).isEmpty
+        ? 'Not monitored'
+        : 'Monitoring enabled';
   }
 
   Widget _buildServiceTile(
@@ -629,6 +626,7 @@ class _NotificationMonitorScreenState extends State<NotificationMonitorScreen>
                             () => _expandedGroups[pkg] = !(_expandedGroups[pkg] ?? false)),
                         packageName: pkg,
                         appName: groups[pkg]!.first.appName,
+                        serviceCount: _monitoredServices(pkg, groups[pkg]!).length,
                         iconBytes: _iconCache[pkg],
                         appColor: _useAppColors ? _colorCache[pkg] : null,
                         subtitle: _subtitle(pkg, groups[pkg]!),

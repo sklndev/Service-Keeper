@@ -9,6 +9,7 @@ class AppGroupCard extends StatelessWidget {
   final VoidCallback onToggleExpanded;
   final String packageName;
   final String appName;
+  final int serviceCount;
   final Uint8List? iconBytes;
   final Color? appColor;
   final String subtitle;
@@ -40,6 +41,7 @@ class AppGroupCard extends StatelessWidget {
     required this.onToggleExpanded,
     required this.packageName,
     required this.appName,
+    required this.serviceCount,
     this.iconBytes,
     this.appColor,
     required this.subtitle,
@@ -78,6 +80,7 @@ class AppGroupCard extends StatelessWidget {
             onToggleExpanded: onToggleExpanded,
             packageName: packageName,
             appName: appName,
+            serviceCount: serviceCount,
             iconBytes: iconBytes,
             appColor: appColor,
             subtitle: subtitle,
@@ -142,6 +145,7 @@ class _AppGroupCardHeaderDelegate extends SliverPersistentHeaderDelegate {
   final VoidCallback onToggleExpanded;
   final String packageName;
   final String appName;
+  final int serviceCount;
   final Uint8List? iconBytes;
   final Color? appColor;
   final String subtitle;
@@ -162,6 +166,7 @@ class _AppGroupCardHeaderDelegate extends SliverPersistentHeaderDelegate {
     required this.onToggleExpanded,
     required this.packageName,
     required this.appName,
+    required this.serviceCount,
     this.iconBytes,
     this.appColor,
     required this.subtitle,
@@ -188,6 +193,7 @@ bool shouldRebuild(_AppGroupCardHeaderDelegate old) =>
     expanded != old.expanded ||
     packageName != old.packageName ||
     appName != old.appName ||
+    serviceCount != old.serviceCount ||
     iconBytes != old.iconBytes ||
     appColor != old.appColor ||
     subtitle != old.subtitle ||
@@ -251,6 +257,39 @@ bool shouldRebuild(_AppGroupCardHeaderDelegate old) =>
                 ),
               ));
 
+    final Widget badgedAvatar = Stack(
+      clipBehavior: Clip.none,
+      children: [
+        avatar,
+        Positioned(
+          key: const ValueKey('service-count-badge'),
+          top: -5,
+          right: -5,
+          child: Semantics(
+            label: '$serviceCount monitored services',
+            child: Container(
+              constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary,
+                shape: BoxShape.circle,
+                border: Border.all(color: bgColor, width: 1.5),
+              ),
+              child: Text(
+                '$serviceCount',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onPrimary,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 9,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+
     return ColoredBox(
       color: theme.colorScheme.surface,
       child: Padding(
@@ -283,7 +322,7 @@ bool shouldRebuild(_AppGroupCardHeaderDelegate old) =>
                                 : Icon(Icons.check_box_outline_blank,
                                     color: fg.withValues(alpha: 0.5), size: 20)),
                       ),
-                    avatar,
+                    badgedAvatar,
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(

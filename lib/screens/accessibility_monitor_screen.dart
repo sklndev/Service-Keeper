@@ -546,8 +546,8 @@ class _AccessibilityMonitorScreenState extends State<AccessibilityMonitorScreen>
             final groupState = monitoredCount == 0 ? 0 : allMonitoredNotifOff ? 1 : 2;
 
             final subtitle = monitoredCount == 0
-                ? '${services.length} service${services.length == 1 ? '' : 's'}'
-                : '$monitoredCount monitored · $activeMonitored active';
+              ? 'Not monitored'
+              : '$activeMonitored active';
 
             return AppGroupCard(
               key: ValueKey(pkg),
@@ -556,6 +556,7 @@ class _AccessibilityMonitorScreenState extends State<AccessibilityMonitorScreen>
                   () => _expandedGroups[pkg] = !(_expandedGroups[pkg] ?? false)),
               packageName: pkg,
               appName: services.first.appName,
+              serviceCount: monitoredCount,
               iconBytes: _iconCache[pkg],
               appColor: appColor,
               subtitle: subtitle,

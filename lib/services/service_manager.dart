@@ -77,7 +77,10 @@ class ServiceManager {
   /// Start (or restart) a service. Returns (success, detail).
   /// When detail == 'restart method: app launch', the caller must NOT verify via
   /// isServiceRunning — JobIntentService runs via job scheduler and won't appear in dumpsys.
-  Future<(bool, String?)> startService(MonitoredService service) async {
+  Future<(bool, String?)> startService(
+    MonitoredService service, {
+    bool allowAppRestart = true,
+  }) async {
     final result = await _shizuku.exec(
       'am start-foreground-service -n ${service.fullServiceName}',
     );
@@ -96,7 +99,7 @@ class ServiceManager {
       // (triggered from home_screen.dart), so the idle-relaunch gate that guards the
       // automatic background paths doesn't apply here - the user is already looking
       // at the app and asked for this restart directly.
-      if (service.appRestartEnabled) {
+      if (allowAppRestart && service.appRestartEnabled) {
         final launched = await _restartViaAppLaunch(service.packageName);
         if (launched) return (true, 'restart method: app launch');
       }
@@ -160,6 +163,9 @@ class ServiceManager {
     }
     return true;
   }
+
+  Future<bool> restartApp(String packageName) =>
+      _restartViaAppLaunch(packageName);
 
   Future<(bool, String?)> _tryBroadcastStartFallback(MonitoredService service) async {
     final actions = await _getBroadcastStartActions(service.packageName);
