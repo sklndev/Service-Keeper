@@ -19,9 +19,9 @@ An Android app that monitors and automatically restarts background services kill
 
 Service Keeper is free and open source software, and is 100% offline (no network permissions, no analytics, no ads).
 
-- **[Obtainium](https://github.com/ImranR98/Obtainium):** add this repo (`https://github.com/shaunkleyn/service_keeper`) as an app source. Obtainium tracks the GitHub Releases page and installs the universal APK.
+- **[Obtainium](https://github.com/ImranR98/Obtainium):** add this repo (`https://github.com/sklndev/service_keeper`) as an app source. Obtainium tracks the GitHub Releases page and installs the universal APK.
 - **F-Droid / IzzyOnDroid:** not yet listed. Metadata for submission lives in [`fastlane/metadata/android`](fastlane/metadata/android/en-US). Once accepted, the app will be installable directly from those repos/clients.
-- **Manual:** download the latest release APK matching your device's ABI (or the universal APK) from the [Releases](https://github.com/shaunkleyn/service_keeper/releases) page.
+- **Manual:** download the latest release APK matching your device's ABI (or the universal APK) from the [Releases](https://github.com/sklndev/service_keeper/releases) page.
 
 ---
 
@@ -75,7 +75,7 @@ Tap **+** on the Services tab → browse running services by app → select what
 ```bash
 # Prerequisites: Flutter 3.x, Android SDK (minSdk 26, targetSdk 35)
 
-git clone https://github.com/shaunkleyn/service_keeper.git
+git clone https://github.com/sklndev/service_keeper.git
 cd service_keeper
 flutter pub get
 flutter run                          # debug on connected device

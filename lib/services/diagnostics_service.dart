@@ -30,7 +30,7 @@ class DiagnosticsReportService {
 
 class DiagnosticsService {
   static const _githubIssueUrl =
-      'https://github.com/shaunkleyn/Service-Keeper/issues/new';
+      'https://github.com/sklndev/Service-Keeper/issues/new';
   static const _prefillSoftLimit = 6500;
 
   final ShizukuService _shizuku;
