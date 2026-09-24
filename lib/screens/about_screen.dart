@@ -1,6 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+
+import '../services/shizuku_service.dart';
 
 class AboutScreen extends StatefulWidget {
   const AboutScreen({super.key});
@@ -10,7 +15,11 @@ class AboutScreen extends StatefulWidget {
 }
 
 class _AboutScreenState extends State<AboutScreen> {
+  final _shizuku = ShizukuService();
   PackageInfo? _info;
+  ShizukuStatus? _shizukuStatus;
+  DateTime? _shizukuReadySince;
+  Timer? _clockTimer;
 
   @override
   void initState() {
@@ -18,6 +27,44 @@ class _AboutScreenState extends State<AboutScreen> {
     PackageInfo.fromPlatform().then((i) {
       if (mounted) setState(() => _info = i);
     });
+    _loadShizukuUptime();
+  }
+
+  @override
+  void dispose() {
+    _clockTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadShizukuUptime() async {
+    final status = await _shizuku.checkStatus();
+    if (!mounted) return;
+    if (status != ShizukuStatus.ready) {
+      setState(() => _shizukuStatus = status);
+      return;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    final stored = prefs.getInt('shizuku_ready_since');
+    setState(() {
+      _shizukuStatus = status;
+      _shizukuReadySince =
+          stored != null ? DateTime.fromMillisecondsSinceEpoch(stored) : null;
+    });
+    if (_shizukuReadySince != null) {
+      _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (mounted) setState(() {});
+      });
+    }
+  }
+
+  String _formatUptime() {
+    final since = _shizukuReadySince;
+    if (since == null) return '';
+    final d = DateTime.now().difference(since);
+    if (d.inDays > 0) return '${d.inDays}d ${d.inHours.remainder(24)}h ${d.inMinutes.remainder(60)}m';
+    if (d.inHours > 0) return '${d.inHours}h ${d.inMinutes.remainder(60)}m';
+    if (d.inMinutes > 0) return '${d.inMinutes}m';
+    return 'just now';
   }
 
   @override
@@ -73,12 +120,28 @@ class _AboutScreenState extends State<AboutScreen> {
           const SizedBox(height: 32),
           const Divider(),
           ListTile(
+            leading: Icon(
+              Icons.bolt,
+              color: _shizukuStatus == ShizukuStatus.ready ? Colors.green : cs.onSurfaceVariant,
+            ),
+            title: const Text('Shizuku uptime'),
+            subtitle: Text(switch (_shizukuStatus) {
+              ShizukuStatus.ready =>
+                _shizukuReadySince != null ? _formatUptime() : 'Active',
+              ShizukuStatus.permissionDenied => 'Permission denied',
+              ShizukuStatus.notRunning => 'Not running',
+              ShizukuStatus.notInstalled => 'Not installed',
+              null => '…',
+            }),
+          ),
+          const Divider(),
+          ListTile(
             leading: const Icon(Icons.code),
             title: const Text('Source code'),
-            subtitle: const Text('github.com/shaunkleyn/Service-Keeper'),
+            subtitle: const Text('github.com/sklndev/Service-Keeper'),
             trailing: const Icon(Icons.open_in_new, size: 18),
             onTap: () => launchUrl(
-              Uri.parse('https://github.com/shaunkleyn/Service-Keeper'),
+              Uri.parse('https://github.com/sklndev/Service-Keeper'),
               mode: LaunchMode.externalApplication,
             ),
           ),
@@ -88,7 +151,7 @@ class _AboutScreenState extends State<AboutScreen> {
             subtitle: const Text('Open an issue on GitHub'),
             trailing: const Icon(Icons.open_in_new, size: 18),
             onTap: () => launchUrl(
-              Uri.parse('https://github.com/shaunkleyn/Service-Keeper/issues/new'),
+              Uri.parse('https://github.com/sklndev/Service-Keeper/issues/new'),
               mode: LaunchMode.externalApplication,
             ),
           ),
