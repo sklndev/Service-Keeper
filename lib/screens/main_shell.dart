@@ -175,41 +175,27 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     await _checkShizuku();
   }
 
-  String _formatActiveDuration() {
-    final since = _shizukuReadySince;
-    if (since == null) return '';
-    final d = DateTime.now().difference(since);
-    if (d.inDays > 0) return '${d.inDays}d ${d.inHours.remainder(24)}h ${d.inMinutes.remainder(60)}m';
-    if (d.inHours > 0) return '${d.inHours}h ${d.inMinutes.remainder(60)}m';
-    if (d.inMinutes > 0) return '${d.inMinutes}m';
-    return 'just now';
-  }
-
   Widget _buildShizukuBanner() {
-    final color = _shizukuStatus == ShizukuStatus.ready ? Colors.green : Colors.orange;
-    final isReady = _shizukuStatus == ShizukuStatus.ready;
-    final duration = isReady ? _formatActiveDuration() : '';
+    if (_shizukuStatus == ShizukuStatus.ready) return const SizedBox.shrink();
     final label = switch (_shizukuStatus) {
-      ShizukuStatus.ready => 'Shizuku active${duration.isNotEmpty ? ' · $duration' : ''}',
       ShizukuStatus.permissionDenied => 'Shizuku: permission denied',
       ShizukuStatus.notRunning => 'Shizuku not running',
       ShizukuStatus.notInstalled => 'Shizuku not installed',
+      ShizukuStatus.ready => '',
     };
-    final icon = isReady ? Icons.check_circle : Icons.warning_amber;
     return GestureDetector(
-      onTap: !isReady ? _showShizukuWarning : null,
+      onTap: _showShizukuWarning,
       child: Container(
-        color: color.withValues(alpha: 0.12),
+        color: Colors.orange.withValues(alpha: 0.12),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         child: Row(children: [
-          Icon(icon, color: color, size: 18),
+          const Icon(Icons.warning_amber, color: Colors.orange, size: 18),
           const SizedBox(width: 8),
           Text(label,
-              style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 13)),
-          if (!isReady) ...[
-            const Spacer(),
-            Text('Tap to fix →', style: TextStyle(color: color, fontSize: 12)),
-          ],
+              style: const TextStyle(
+                  color: Colors.orange, fontWeight: FontWeight.w600, fontSize: 13)),
+          const Spacer(),
+          const Text('Tap to fix →', style: TextStyle(color: Colors.orange, fontSize: 12)),
         ]),
       ),
     );
