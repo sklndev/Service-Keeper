@@ -44,12 +44,18 @@ class ServiceTile extends StatefulWidget {
   State<ServiceTile> createState() => _ServiceTileState();
 }
 
-class _ServiceTileState extends State<ServiceTile> {
+class _ServiceTileState extends State<ServiceTile>
+    with SingleTickerProviderStateMixin {
   bool _checkTriggered = false;
+  late final AnimationController _statusAnimation;
 
   @override
   void initState() {
     super.initState();
+    _statusAnimation = AnimationController(
+      vsync: this,
+    );
+    _syncStatusAnimation();
     _maybeTriggerDueCheck();
   }
 
@@ -62,7 +68,25 @@ class _ServiceTileState extends State<ServiceTile> {
         old.service.enabled != widget.service.enabled) {
       _checkTriggered = false;
     }
+    if (old.isRestarting != widget.isRestarting ||
+        old.service.state != widget.service.state) {
+      _syncStatusAnimation();
+    }
     _maybeTriggerDueCheck();
+  }
+
+  void _syncStatusAnimation() {
+    if (widget.isRestarting) {
+      _statusAnimation.duration = const Duration(milliseconds: 900);
+      _statusAnimation.repeat();
+    } else if (widget.service.state == ServiceState.running) {
+      _statusAnimation.duration = const Duration(seconds: 1);
+      _statusAnimation.repeat();
+    } else {
+      _statusAnimation
+        ..stop()
+        ..value = 0;
+    }
   }
 
   void _maybeTriggerDueCheck() {
@@ -79,6 +103,7 @@ class _ServiceTileState extends State<ServiceTile> {
 
   @override
   void dispose() {
+    _statusAnimation.dispose();
     super.dispose();
   }
 
@@ -98,6 +123,16 @@ class _ServiceTileState extends State<ServiceTile> {
       ServiceState.crashed => 'Not Running',
       ServiceState.stopped => 'Disabled',
       ServiceState.unknown => 'Unknown',
+    };
+  }
+
+  IconData _statusIcon() {
+    if (widget.isRestarting) return Icons.sync_rounded;
+    return switch (widget.service.state) {
+      ServiceState.running => Icons.circle,
+      ServiceState.crashed => Icons.priority_high_rounded,
+      ServiceState.stopped => Icons.pause_rounded,
+      ServiceState.unknown => Icons.question_mark_rounded,
     };
   }
 
@@ -158,8 +193,8 @@ class _ServiceTileState extends State<ServiceTile> {
                         : CircleAvatar(
                             backgroundColor: theme.colorScheme.primaryContainer,
                             child: Text(
-                              widget.service.displayLabel.isNotEmpty
-                                  ? widget.service.displayLabel[0].toUpperCase()
+                              widget.service.serviceDisplayName.isNotEmpty
+                                  ? widget.service.serviceDisplayName[0].toUpperCase()
                                   : '?',
                               style: TextStyle(color: theme.colorScheme.onPrimaryContainer),
                             ),
@@ -186,21 +221,123 @@ class _ServiceTileState extends State<ServiceTile> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      widget.service.displayLabel,
-                      style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                    Row(
+                      children: [
+                        Tooltip(
+                          message: _statusLabel(),
+                          child: Semantics(
+                            label: 'Service status: ${_statusLabel()}',
+                            child: Container(
+                              key: const ValueKey('service-status-badge'),
+                              width: 20,
+                              height: 20,
+                              decoration: BoxDecoration(
+                                color: widget.service.state == ServiceState.running &&
+                                        !widget.isRestarting
+                                    ? Colors.transparent
+                                    : statusColor.withValues(alpha: 0.16),
+                                shape: BoxShape.circle,
+                              ),
+                              child: widget.isRestarting
+                                  ? RotationTransition(
+                                      key: const ValueKey('restart-status-rotation'),
+                                      turns: _statusAnimation,
+                                      child: Icon(
+                                        _statusIcon(),
+                                        size: 14,
+                                        color: statusColor,
+                                      ),
+                                    )
+                                  : widget.service.state == ServiceState.running
+                                      ? AnimatedBuilder(
+                                          key: const ValueKey('running-status-pulse'),
+                                          animation: _statusAnimation,
+                                          builder: (context, _) {
+                                            final pingProgress = Curves.easeOutCubic
+                                                .transform(
+                                                  (_statusAnimation.value / 0.75)
+                                                      .clamp(0.0, 1.0),
+                                                );
+                                            return Stack(
+                                              alignment: Alignment.center,
+                                              children: [
+                                                Opacity(
+                                                  key: const ValueKey(
+                                                      'running-status-ping-ring'),
+                                                  opacity: 0.75 * (1 - pingProgress),
+                                                  child: Transform.scale(
+                                                    scale: 1 + pingProgress,
+                                                    child: Container(
+                                                      width: 10,
+                                                      height: 10,
+                                                      decoration: BoxDecoration(
+                                                        color: statusColor,
+                                                        shape: BoxShape.circle,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                                Container(
+                                                  key: const ValueKey(
+                                                      'running-status-solid-dot'),
+                                                  width: 8,
+                                                  height: 8,
+                                                  decoration: BoxDecoration(
+                                                    color: statusColor,
+                                                    shape: BoxShape.circle,
+                                                  ),
+                                                ),
+                                              ],
+                                            );
+                                          },
+                                        )
+                                  : Icon(
+                                      _statusIcon(),
+                                      size: 14,
+                                      color: statusColor,
+                                    ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 7),
+                        Expanded(
+                          child: Text(
+                            widget.service.serviceDisplayName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.titleSmall
+                              ?.copyWith(fontWeight: FontWeight.w500),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        IconButton(
+                          key: const ValueKey('service-notification-toggle'),
+                          onPressed: widget.onToggleNotifications,
+                          tooltip: widget.service.notificationsEnabled
+                              ? 'Disable notifications'
+                              : 'Enable notifications',
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.all(4),
+                          constraints: const BoxConstraints(
+                            minWidth: 28,
+                            minHeight: 28,
+                          ),
+                          icon: Icon(
+                            widget.service.notificationsEnabled
+                                ? Icons.notifications
+                                : Icons.notifications_off,
+                            size: 17,
+                            color: widget.service.notificationsEnabled
+                                ? (widget.accentColor ?? theme.colorScheme.primary)
+                                : theme.colorScheme.onSurfaceVariant
+                                    .withValues(alpha: 0.45),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      widget.service.serviceClass,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                        fontSize: 11,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Row(children: [
-                      if (widget.globalIntervalEnabled) ...[
+                    if (widget.globalIntervalEnabled) ...[
+                      const SizedBox(height: 4),
+                      Row(children: [
                         Icon(Icons.schedule, size: 12, color: theme.colorScheme.primary),
                         const SizedBox(width: 4),
                         Text(
@@ -213,55 +350,7 @@ class _ServiceTileState extends State<ServiceTile> {
                           ),
                         ),
                         const SizedBox(width: 12),
-                      ],
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: statusColor.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          _statusLabel(),
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: statusColor,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Icon(
-                        widget.service.notificationsEnabled
-                            ? Icons.notifications
-                            : Icons.notifications_off,
-                        size: 16,
-                        color: widget.service.notificationsEnabled
-                            ? (widget.accentColor ?? theme.colorScheme.primary)
-                            : theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.45),
-                      ),
-                      if (widget.service.appRestartEnabled) ...[
-                        const SizedBox(width: 5),
-                        Icon(
-                          Icons.open_in_browser,
-                          semanticLabel: 'App restart enabled',
-                          size: 16,
-                          color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
-                        ),
-                      ],
-                    ]),
-                    if (widget.service.lastChecked != null) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        'Last checked: ${_formatTime(widget.service.lastChecked!)}',
-                        style: theme.textTheme.bodySmall?.copyWith(fontSize: 10),
-                      ),
-                    ],
-                    if (widget.service.lastRestarted != null) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        'Last restarted: ${_formatTime(widget.service.lastRestarted!)}',
-                        style: theme.textTheme.bodySmall?.copyWith(fontSize: 10),
-                      ),
+                      ]),
                     ],
                     if (nextLabel.isNotEmpty) ...[
                       const SizedBox(height: 3),

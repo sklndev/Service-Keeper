@@ -49,6 +49,8 @@ class KeeperForegroundService : Service() {
             context.stopService(Intent(context, KeeperForegroundService::class.java))
         }
 
+        fun hasConfiguredServices(context: Context): Boolean = readCountFromPrefs(context) > 0
+
         private fun readCountFromPrefs(context: Context): Int {
             val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             val raw = prefs.getString(SERVICES_KEY, null) ?: return 0
@@ -142,6 +144,14 @@ class KeeperForegroundService : Service() {
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        // Recents-swipe is a stronger kill signal than plain process death: some OEMs
+        // treat it as "user doesn't want this running" and skip the normal START_STICKY
+        // restart. Don't wait for the 15-minute alarm - kick recovery immediately.
+        KeeperRecoveryWorker.enqueue(applicationContext)
+    }
 
     // ── Deferred relaunch on unlock ("locked" idle mode) ───────────────────────
 
